@@ -120,7 +120,7 @@ function executeActionInTab(tabId, decision) {
 }
 
 async function callLLM(task, pageState, history) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
   
   // Truncate elements if too large, but for MVP let's assume it fits in context
   const userPrompt = `
