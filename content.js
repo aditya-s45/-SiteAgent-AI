@@ -5,30 +5,58 @@
 
 console.log("SiteAgent AI Content Script injected.");
 
+// ==========================================
+// SiteAgent AI - Content Script
+// Handles DOM perception and Action execution
+// ==========================================
+
+console.log("SiteAgent AI Content Script injected.");
+
 // --- DOM Perception Engine ---
+
+function isVisible(el) {
+  const rect = el.getBoundingClientRect();
+  const style = window.getComputedStyle(el);
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.visibility !== 'hidden' &&
+    style.display !== 'none' &&
+    style.opacity !== '0'
+  );
+}
 
 function extractInteractiveElements() {
   const elements = [];
-  // Basic selectors for MVP
-  const selectors = 'a, button, input, select, textarea';
+  // Comprehensive selectors for interactive elements
+  const selectors = 'a, button, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"])';
   
   document.querySelectorAll(selectors).forEach((el, index) => {
-    // Check if element is visible
-    const rect = el.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0 || el.style.visibility === 'hidden' || el.style.display === 'none') {
-      return;
+    if (!isVisible(el)) return;
+    
+    // Check if it's already tagged to avoid duplicates or issues
+    if (!el.dataset.siteagentId) {
+      el.dataset.siteagentId = `agent-el-${index}`;
     }
     
-    const id = `agent-el-${index}`;
-    // Store id on the element for later interaction
-    el.dataset.agentId = id;
+    // Clean up text content
+    let text = (el.innerText || el.value || el.placeholder || '').trim();
+    if (text.length > 100) {
+      text = text.substring(0, 100) + '...';
+    }
+    
+    // Get aria label if present
+    const ariaLabel = el.getAttribute('aria-label') || '';
     
     elements.push({
-      id: id,
+      id: el.dataset.siteagentId,
       tag: el.tagName.toLowerCase(),
-      type: el.type || null,
-      text: el.innerText || el.value || el.placeholder || '',
-      ariaLabel: el.getAttribute('aria-label') || ''
+      type: el.type || undefined,
+      role: el.getAttribute('role') || undefined,
+      text: text,
+      ariaLabel: ariaLabel,
+      href: el.href ? new URL(el.href).pathname : undefined,
+      isEnabled: !el.disabled
     });
   });
   
@@ -36,10 +64,13 @@ function extractInteractiveElements() {
 }
 
 function buildPageState() {
+  const interactiveElements = extractInteractiveElements();
+  
+  // Create a simplified representation of the page
   return {
     url: window.location.href,
     title: document.title,
-    interactiveElements: extractInteractiveElements()
+    elements: interactiveElements
   };
 }
 
