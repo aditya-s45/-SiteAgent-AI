@@ -167,8 +167,15 @@ async function callLLM(task, pageState, history) {
   const data = await response.json();
   const textResponse = data.candidates[0].content.parts[0].text;
   
+  let cleanText = textResponse.trim();
+  const start = cleanText.indexOf('{');
+  const end = cleanText.lastIndexOf('}');
+  if (start !== -1 && end !== -1 && end >= start) {
+    cleanText = cleanText.substring(start, end + 1);
+  }
+  
   try {
-    return JSON.parse(textResponse);
+    return JSON.parse(cleanText);
   } catch (e) {
     throw new Error(`LLM did not return valid JSON: ${textResponse}`);
   }
