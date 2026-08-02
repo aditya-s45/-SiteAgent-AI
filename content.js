@@ -5,12 +5,6 @@
 
 console.log("SiteAgent AI Content Script injected.");
 
-// ==========================================
-// SiteAgent AI - Content Script
-// Handles DOM perception and Action execution
-// ==========================================
-
-console.log("SiteAgent AI Content Script injected.");
 
 // --- DOM Perception Engine ---
 
@@ -110,10 +104,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   else if (message.action === 'AGENT_ACT') {
     updateOverlayStatus(`Executing: ${message.decision.action}`);
-    // Will implement actual clicking/typing later
-    setTimeout(() => {
-      sendResponse({ success: true });
-    }, 500);
+    executeAction(message.decision)
+      .then(() => {
+        sendResponse({ success: true });
+      })
+      .catch((err) => {
+        sendResponse({ success: false, error: err.message });
+      });
+    return true; // Keep channel open for async response
   }
   else if (message.action === 'AGENT_DONE') {
     updateOverlayStatus(`✅ Done: ${message.result}`);
@@ -123,3 +121,57 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   return true;
 });
+
+// --- Action Executor ---
+
+async function executeAction(decision) {
+  const { action, targetElementId, params } = decision;
+  
+  if (action === 'navigate') {
+    window.location.href = params.url;
+    return;
+  }
+  
+  const targetEl = document.querySelector(`[data-siteagent-id="${targetElementId}"]`);
+  if (!targetEl && action !== 'wait') {
+    throw new Error(`Element ${targetElementId} not found`);
+  }
+  
+  // Highlight element to show the user what the agent is doing
+  if (targetEl) highlightElement(targetEl);
+
+  switch (action) {
+    case 'click':
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await new Promise(r => setTimeout(r, 500));
+      targetEl.click();
+      break;
+    case 'type':
+      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      await new Promise(r => setTimeout(r, 500));
+      targetEl.focus();
+      targetEl.value = params.text;
+      // Dispatch events to trigger framework listeners (React, Angular, etc.)
+      targetEl.dispatchEvent(new Event('input', { bubbles: true }));
+      targetEl.dispatchEvent(new Event('change', { bubbles: true }));
+      break;
+    case 'wait':
+      await new Promise(r => setTimeout(r, params.duration || 2000));
+      break;
+    default:
+      console.warn('Unknown action:', action);
+  }
+}
+
+function highlightElement(el) {
+  const originalOutline = el.style.outline;
+  const originalTransition = el.style.transition;
+  
+  el.style.transition = 'outline 0.3s ease';
+  el.style.outline = '4px solid #a855f7';
+  
+  setTimeout(() => {
+    el.style.outline = originalOutline;
+    el.style.transition = originalTransition;
+  }, 2000);
+}
