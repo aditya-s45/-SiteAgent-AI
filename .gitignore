@@ -1,6 +1,7 @@
 node_modules/
 .env
 *.log
+config.js
 config.local.js
 ml/training/
 ml/model/

@@ -3,18 +3,7 @@
 // Two-Phase Orchestrator: Compile → Execute
 // ==========================================
 
-let CONFIG = null;
-async function getConfig() {
-  if (CONFIG) return CONFIG;
-  try {
-    const mod = await import('./config.local.js');
-    CONFIG = mod.CONFIG;
-  } catch(e) {
-    const mod = await import('./config.js');
-    CONFIG = mod.CONFIG;
-  }
-  return CONFIG;
-}
+import { CONFIG } from './config.js';
 
 console.log("SiteAgent AI v2.0 Background Service Worker started.");
 
@@ -240,8 +229,7 @@ async function runExecutePhase(tabId, scriptCode) {
 // =============================================
 
 async function generateScript(task, schema) {
-  const conf = await getConfig();
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${conf.GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
 
   // Build a concise representation of the schema for the prompt
   const schemaDescription = Object.entries(schema.schema)
