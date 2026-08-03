@@ -118,6 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
       action: 'START_COMPILE',
       task: task, 
       tabId: activeTabId
+    }, (response) => {
+      if (chrome.runtime.lastError) {
+        setStatus(`Extension Error: ${chrome.runtime.lastError.message}`, 'error');
+        compileRunBtn.disabled = false;
+        compileRunBtn.style.opacity = '1';
+        showPhase('done');
+      }
     });
   });
 
