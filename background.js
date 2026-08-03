@@ -295,7 +295,12 @@ async function sendToTabWithRetry(tabId, message, maxRetries = 3, delay = 1500) 
 }
 
 function broadcastToPopup(action, data) {
-  chrome.runtime.sendMessage({ action, ...data }).catch(() => {
-    // Popup might be closed, that's fine
-  });
+  try {
+    const p = chrome.runtime.sendMessage({ action, ...data });
+    if (p && typeof p.catch === 'function') {
+      p.catch(() => {});
+    }
+  } catch (e) {
+    console.error('Error broadcasting to popup:', e);
+  }
 }
