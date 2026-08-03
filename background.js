@@ -193,14 +193,20 @@ async function callLLM(task, pageState, history) {
   let cleanText = textResponse.trim();
   const start = cleanText.indexOf('{');
   const end = cleanText.lastIndexOf('}');
+  
   if (start !== -1 && end !== -1 && end >= start) {
     cleanText = cleanText.substring(start, end + 1);
+  } else if (start !== -1 && end === -1) {
+    // Truncated JSON? Auto-close it
+    cleanText = cleanText.substring(start) + '}';
   }
   
   try {
+    // Also remove trailing commas just in case
+    cleanText = cleanText.replace(/,\s*([}\]])/g, '$1');
     return JSON.parse(cleanText);
   } catch (e) {
-    throw new Error(`LLM did not return valid JSON: ${textResponse}`);
+    throw new Error(`Parse Error: ${e.message} | Raw: ${cleanText}`);
   }
 }
 
