@@ -52,8 +52,13 @@ async function runAgentLoop(tabId) {
   
   while (agentState[tabId].step < MAX_STEPS) {
     try {
-      // 1. OBSERVE (Get DOM state)
-      const pageState = await requestPageState(tabId);
+      // Re-init overlay on every step (in case of navigation)
+      chrome.tabs.sendMessage(tabId, { action: 'AGENT_INIT', task: agentState[tabId].task }, () => {
+         let e = chrome.runtime.lastError; // Ignore if port closed
+      });
+      
+      // 1. OBSERVE (Get DOM state) - with retry for slow page loads
+      const pageState = await requestPageStateWithRetry(tabId, 4);
       console.log(`[Step ${agentState[tabId].step}] Page State Received`, pageState);
       
       // 2. THINK (Call LLM)
@@ -104,11 +109,29 @@ function requestPageState(tabId) {
   });
 }
 
+async function requestPageStateWithRetry(tabId, retries) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await requestPageState(tabId);
+    } catch (e) {
+      console.log(`Retry ${i+1}/${retries} getting page state...`);
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
+  throw new Error("Could not contact content script after multiple retries. Page might still be loading.");
+}
+
 function executeActionInTab(tabId, decision) {
   return new Promise((resolve, reject) => {
     chrome.tabs.sendMessage(tabId, { action: 'AGENT_ACT', decision: decision }, (response) => {
       if (chrome.runtime.lastError) {
-        return reject(new Error(chrome.runtime.lastError.message));
+        const msg = chrome.runtime.lastError.message;
+        if (msg.includes("closed") || msg.includes("receiving end does not exist")) {
+           // Page is navigating, treat as success
+           console.log("Port closed during action, assuming navigation.");
+           return resolve();
+        }
+        return reject(new Error(msg));
       }
       if (response && response.success) {
         resolve();
