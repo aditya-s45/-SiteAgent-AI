@@ -115,8 +115,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Send to background
     chrome.runtime.sendMessage({
-      type: 'START_COMPILE',
-      payload: { task, tabId: activeTabId }
+      action: 'START_COMPILE',
+      task: task, 
+      tabId: activeTabId
     });
   });
 
@@ -134,16 +135,16 @@ document.addEventListener('DOMContentLoaded', () => {
     executeStartTime = performance.now();
     
     chrome.runtime.sendMessage({
-      type: 'RE_RUN',
-      payload: { tabId: activeTabId }
+      action: 'RE_RUN',
+      tabId: activeTabId
     });
   });
 
   // Message Listener
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    switch (message.type) {
+    switch (message.action) {
       case 'COMPILE_STATUS':
-        setStatus(message.payload.message, 'working');
+        setStatus(message.message, 'working');
         break;
         
       case 'COMPILE_DONE':
@@ -152,10 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
         statCompile.textContent = compileSecs;
         
         // Save script
-        chrome.storage.local.set({ lastScript: message.payload.script });
+        chrome.storage.local.set({ lastScript: message.script });
         
         // Show script
-        scriptContent.innerHTML = simpleHighlight(message.payload.script);
+        scriptContent.innerHTML = simpleHighlight(message.script);
         codePreviewContainer.classList.remove('hidden');
         
         // Move to phase 2
@@ -165,7 +166,7 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
 
       case 'EXECUTE_STATUS':
-        setStatus(message.payload.message, 'working');
+        setStatus(message.message, 'working');
         break;
 
       case 'EXECUTE_DONE':
@@ -174,7 +175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statExecute.textContent = executeSecs;
         
         showPhase('done');
-        setStatus(message.payload.result || 'Execution completed successfully!', 'success');
+        setStatus(message.result || 'Execution completed successfully!', 'success');
         stats.classList.remove('hidden');
         
         compileRunBtn.disabled = false;
@@ -185,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       case 'EXECUTE_ERROR':
         showPhase('done');
-        setStatus(`Error: ${message.payload.error}`, 'error');
+        setStatus(`Error: ${message.error}`, 'error');
         
         compileRunBtn.disabled = false;
         compileRunBtn.style.opacity = '1';
