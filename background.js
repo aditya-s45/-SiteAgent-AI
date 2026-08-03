@@ -192,17 +192,39 @@ async function callLLM(task, pageState, history) {
   
   let cleanText = textResponse.trim();
   const start = cleanText.indexOf('{');
-  const end = cleanText.lastIndexOf('}');
   
-  if (start !== -1 && end !== -1 && end >= start) {
-    cleanText = cleanText.substring(start, end + 1);
-  } else if (start !== -1 && end === -1) {
-    // Truncated JSON? Auto-close it
-    cleanText = cleanText.substring(start) + '}';
+  if (start !== -1) {
+    let braceCount = 0;
+    let inString = false;
+    let escape = false;
+    let foundEnd = false;
+    
+    for (let i = start; i < cleanText.length; i++) {
+      const char = cleanText[i];
+      if (inString) {
+        if (escape) escape = false;
+        else if (char === '\\') escape = true;
+        else if (char === '"') inString = false;
+      } else {
+        if (char === '"') inString = true;
+        else if (char === '{') braceCount++;
+        else if (char === '}') braceCount--;
+        
+        if (braceCount === 0) {
+          cleanText = cleanText.substring(start, i + 1);
+          foundEnd = true;
+          break;
+        }
+      }
+    }
+    if (!foundEnd) {
+      // Truncated JSON
+      cleanText = cleanText.substring(start) + '}'.repeat(braceCount);
+    }
   }
   
   try {
-    // Also remove trailing commas just in case
+    // Remove trailing commas
     cleanText = cleanText.replace(/,\s*([}\]])/g, '$1');
     return JSON.parse(cleanText);
   } catch (e) {
