@@ -7,22 +7,67 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
-    <h1>🤖 SiteAgent AI</h1>
-    <p>Your Autonomous Browser Agent</p>
-  </div>
-  
   <div class="container">
-    <div class="input-group">
-      <textarea id="taskInput" placeholder="e.g. Find the cheapest flight to Delhi..."></textarea>
-      <button id="btnStart">Run Agent</button>
-    </div>
-    
-    <div class="status-panel">
-      <div id="statusText">Agent is idle.</div>
-    </div>
+    <header class="header">
+      <div class="header-content">
+        <span class="icon">🧠</span>
+        <div class="header-text">
+          <h1>SiteAgent AI</h1>
+          <h2>Compile-then-Execute Engine</h2>
+        </div>
+      </div>
+    </header>
+
+    <main class="main-content">
+      <div class="input-section" id="input-section">
+        <textarea id="task-input" placeholder="What do you want to automate on this page? e.g., 'Add a laptop to the cart'"></textarea>
+        <button id="compile-run-btn" class="btn primary-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+          Compile & Run
+        </button>
+      </div>
+
+      <div class="phase-indicator hidden" id="phase-indicator">
+        <div class="phase" id="phase-1">
+          <span class="phase-icon">🧠</span>
+          <span class="phase-text">Compiling<span class="dots">...</span></span>
+          <div class="spinner"></div>
+        </div>
+        <div class="phase-connector"></div>
+        <div class="phase" id="phase-2">
+          <span class="phase-icon">⚡</span>
+          <span class="phase-text">Executing<span class="dots">...</span></span>
+          <div class="pulse-indicator"></div>
+        </div>
+      </div>
+
+      <div class="status-panel hidden" id="status-panel">
+        <div class="status-message" id="status-message">Initializing...</div>
+      </div>
+
+      <div class="code-preview-container hidden" id="code-preview-container">
+        <div class="code-header" id="code-header">
+          <span>Generated Script</span>
+          <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </div>
+        <div class="code-content collapsed" id="code-content">
+          <pre><code id="script-content"></code></pre>
+        </div>
+      </div>
+      
+      <button id="re-run-btn" class="btn secondary-btn hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.59-9.21L21.5 8"></path></svg>
+        Re-run Script
+      </button>
+
+    </main>
+
+    <footer class="footer">
+      <div id="stats" class="stats hidden">
+        Compiled in <span id="stat-compile">0</span>s. Executed in <span id="stat-execute">0</span>s.
+      </div>
+    </footer>
   </div>
-  
   <script src="popup.js"></script>
 </body>
 </html>

@@ -1,12 +1,13 @@
 // ==========================================
-// SiteAgent AI - Content Script
-// Handles DOM perception and Action execution
+// SiteAgent AI v2.0 - Content Script
+// Semantic DOM Scanner + Script Executor
 // ==========================================
 
-console.log("SiteAgent AI Content Script injected.");
+console.log("SiteAgent AI v2.0 Content Script loaded.");
 
-
-// --- DOM Perception Engine ---
+// =============================================
+// DOM PERCEPTION: Scan & Tag Interactive Elements
+// =============================================
 
 function isVisible(el) {
   const rect = el.getBoundingClientRect();
@@ -20,158 +21,233 @@ function isVisible(el) {
   );
 }
 
-function extractInteractiveElements() {
+/**
+ * Extracts all interactive elements from the page,
+ * tags them with siteagent IDs, and classifies them
+ * using the ML classifier (heuristic MVP).
+ */
+function scanAndClassifyPage() {
+  const selectors = [
+    'a', 'button', 'input', 'select', 'textarea',
+    '[role="button"]', '[role="link"]', '[role="checkbox"]',
+    '[role="switch"]', '[role="menuitem"]', '[role="tab"]',
+    '[role="searchbox"]', '[role="combobox"]',
+    '[tabindex]:not([tabindex="-1"])',
+    '[contenteditable="true"]'
+  ].join(', ');
+
   const elements = [];
-  // Comprehensive selectors for interactive elements
-  const selectors = 'a, button, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="switch"], [tabindex]:not([tabindex="-1"])';
-  
-  document.querySelectorAll(selectors).forEach((el, index) => {
+  let index = 0;
+
+  document.querySelectorAll(selectors).forEach((el) => {
     if (!isVisible(el)) return;
-    
-    // Check if it's already tagged to avoid duplicates or issues
-    if (!el.dataset.siteagentId) {
-      el.dataset.siteagentId = `agent-el-${index}`;
+
+    // Assign a stable ID to this element
+    const id = `agent-el-${index}`;
+    el.dataset.siteagentId = id;
+    index++;
+
+    // Classify the element using heuristic classifier
+    let classification = { role: 'other', confidence: 0.5 };
+    if (window.ElementClassifier) {
+      classification = window.ElementClassifier.classifyElement(el);
     }
-    
-    // Clean up text content
+
+    // Tag the element with its semantic role for script execution
+    el.dataset.siteagentRole = classification.role;
+
+    // Clean up text for schema
     let text = (el.innerText || el.value || el.placeholder || '').trim();
-    if (text.length > 100) {
-      text = text.substring(0, 100) + '...';
-    }
-    
-    // Get aria label if present
+    if (text.length > 80) text = text.substring(0, 80) + '...';
+
     const ariaLabel = el.getAttribute('aria-label') || '';
-    
+
     elements.push({
-      id: el.dataset.siteagentId,
+      id: id,
       tag: el.tagName.toLowerCase(),
       type: el.type || undefined,
-      role: el.getAttribute('role') || undefined,
+      role: classification.role,
+      confidence: classification.confidence,
       text: text,
       ariaLabel: ariaLabel,
-      href: el.href ? new URL(el.href).pathname : undefined,
+      name: el.getAttribute('name') || undefined,
+      href: el.href ? (() => { try { return new URL(el.href).pathname; } catch(e) { return el.href; } })() : undefined,
       isEnabled: !el.disabled
     });
   });
-  
+
   return elements;
 }
 
-function buildPageState() {
-  const interactiveElements = extractInteractiveElements();
-  
-  // Create a simplified representation of the page
+/**
+ * Build a semantic schema grouped by role.
+ * This is what gets sent to Gemini for script generation.
+ */
+function buildSemanticSchema() {
+  const elements = scanAndClassifyPage();
+  const schema = {};
+
+  elements.forEach(el => {
+    if (!schema[el.role]) schema[el.role] = [];
+    schema[el.role].push({
+      id: el.id,
+      tag: el.tag,
+      type: el.type,
+      text: el.text,
+      ariaLabel: el.ariaLabel,
+      name: el.name,
+      href: el.href,
+      confidence: el.confidence
+    });
+  });
+
   return {
     url: window.location.href,
     title: document.title,
-    elements: interactiveElements
+    schema: schema,
+    totalElements: elements.length,
+    timestamp: Date.now()
   };
 }
 
-// --- UI Overlay ---
+// =============================================
+// UI OVERLAY: Phase-Aware Status Display
+// =============================================
+
 let overlayEl = null;
 
 function createOverlay(task) {
-  if (overlayEl) return;
-  
+  // Remove existing overlay if any
+  removeOverlay();
+
   overlayEl = document.createElement('div');
   overlayEl.id = 'siteagent-overlay';
   overlayEl.innerHTML = `
-    <div class="siteagent-header">🤖 SiteAgent AI</div>
+    <div class="siteagent-header">🧠 SiteAgent AI</div>
     <div class="siteagent-task">Task: <span>${task}</span></div>
+    <div class="siteagent-phase" id="siteagent-phase"></div>
     <div class="siteagent-status" id="siteagent-status">Initializing...</div>
   `;
   document.body.appendChild(overlayEl);
 }
 
-function updateOverlayStatus(status) {
-  if (!overlayEl) return;
-  const statusEl = document.getElementById('siteagent-status');
-  if (statusEl) statusEl.textContent = status;
+function removeOverlay() {
+  if (overlayEl) {
+    overlayEl.remove();
+    overlayEl = null;
+  }
+  const existing = document.getElementById('siteagent-overlay');
+  if (existing) existing.remove();
 }
 
-// --- Message Listener ---
+function updatePhase(phase, message) {
+  const phaseEl = document.getElementById('siteagent-phase');
+  if (!phaseEl) return;
+
+  if (phase === 'compile') {
+    phaseEl.innerHTML = `<span class="phase-badge compile">🧠 Phase 1: Compiling</span>`;
+    phaseEl.className = 'siteagent-phase';
+  } else if (phase === 'execute') {
+    phaseEl.innerHTML = `<span class="phase-badge execute">⚡ Phase 2: Executing</span>`;
+    phaseEl.className = 'siteagent-phase';
+  }
+
+  updateStatus(message || '');
+}
+
+function updateStatus(message) {
+  const statusEl = document.getElementById('siteagent-status');
+  if (statusEl) statusEl.textContent = message;
+}
+
+// Listen for progress events from the EventSimulator
+window.addEventListener('siteagent-progress', (e) => {
+  updateStatus(e.detail.message);
+});
+
+// =============================================
+// SCRIPT EXECUTION ENGINE
+// =============================================
+
+/**
+ * Execute a generated automation script in a controlled environment.
+ * The script is a function body that receives a `sim` (EventSimulator) instance.
+ */
+async function executeGeneratedScript(scriptCode) {
+  if (!window.EventSimulator) {
+    throw new Error('EventSimulator not loaded');
+  }
+
+  const sim = new window.EventSimulator();
+
+  try {
+    // Wrap the script code in an async function
+    const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+    const scriptFn = new AsyncFunction('sim', scriptCode);
+
+    // Execute the script
+    const result = await scriptFn(sim);
+    return result || { success: true };
+  } catch (error) {
+    throw new Error(`Script execution failed: ${error.message}`);
+  }
+}
+
+// =============================================
+// MESSAGE HANDLER: Bridge between background.js and page
+// =============================================
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.action === 'AGENT_INIT') {
-    createOverlay(message.task);
-    sendResponse({ success: true });
-  } 
-  else if (message.action === 'GET_PAGE_STATE') {
-    updateOverlayStatus("Scanning page...");
-    const state = buildPageState();
-    sendResponse(state);
-  }
-  else if (message.action === 'AGENT_ACT') {
-    updateOverlayStatus(`Executing: ${message.decision.action}`);
-    executeAction(message.decision)
-      .then(() => {
-        sendResponse({ success: true });
-      })
-      .catch((err) => {
-        sendResponse({ success: false, error: err.message });
-      });
-    return true; // Keep channel open for async response
-  }
-  else if (message.action === 'AGENT_DONE') {
-    updateOverlayStatus(`✅ Done: ${message.result}`);
-  }
-  else if (message.action === 'AGENT_ERROR') {
-    updateOverlayStatus(`❌ Error: ${message.error}`);
+  switch (message.action) {
+    case 'AGENT_INIT':
+      createOverlay(message.task);
+      sendResponse({ success: true });
+      break;
+
+    case 'COMPILE_SCAN':
+      // Phase 1: Scan the page and return semantic schema
+      updatePhase('compile', 'Scanning page elements...');
+      try {
+        const schema = buildSemanticSchema();
+        updateStatus(`Found ${schema.totalElements} interactive elements.`);
+        sendResponse(schema);
+      } catch (err) {
+        sendResponse({ error: err.message });
+      }
+      break;
+
+    case 'EXECUTE_SCRIPT':
+      // Phase 2: Execute the generated script
+      updatePhase('execute', 'Running automation script...');
+      executeGeneratedScript(message.script)
+        .then((result) => {
+          updateStatus(`✅ Done: ${result.result || 'Task completed'}`);
+          sendResponse({ success: true, result: result });
+        })
+        .catch((err) => {
+          updateStatus(`❌ Error: ${err.message}`);
+          sendResponse({ success: false, error: err.message });
+        });
+      return true; // Keep channel open for async
+
+    case 'RESCAN_PAGE':
+      // Re-scan after navigation (ML classifier runs again)
+      try {
+        const newSchema = buildSemanticSchema();
+        updateStatus(`Re-scanned: ${newSchema.totalElements} elements.`);
+        sendResponse(newSchema);
+      } catch (err) {
+        sendResponse({ error: err.message });
+      }
+      break;
+
+    case 'AGENT_DONE':
+      updateStatus(`✅ ${message.result}`);
+      break;
+
+    case 'AGENT_ERROR':
+      updateStatus(`❌ ${message.error}`);
+      break;
   }
   return true;
 });
-
-// --- Action Executor ---
-
-async function executeAction(decision) {
-  const { action, targetElementId, params } = decision;
-  
-  if (action === 'navigate') {
-    window.location.href = params.url;
-    return;
-  }
-  
-  const targetEl = document.querySelector(`[data-siteagent-id="${targetElementId}"]`);
-  if (!targetEl && action !== 'wait') {
-    throw new Error(`Element ${targetElementId} not found`);
-  }
-  
-  // Highlight element to show the user what the agent is doing
-  if (targetEl) highlightElement(targetEl);
-
-  switch (action) {
-    case 'click':
-      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await new Promise(r => setTimeout(r, 500));
-      targetEl.click();
-      break;
-    case 'type':
-      targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      await new Promise(r => setTimeout(r, 500));
-      targetEl.focus();
-      targetEl.value = params.text;
-      // Dispatch events to trigger framework listeners (React, Angular, etc.)
-      targetEl.dispatchEvent(new Event('input', { bubbles: true }));
-      targetEl.dispatchEvent(new Event('change', { bubbles: true }));
-      break;
-    case 'wait':
-      await new Promise(r => setTimeout(r, params.duration || 2000));
-      break;
-    default:
-      console.warn('Unknown action:', action);
-  }
-}
-
-function highlightElement(el) {
-  const originalOutline = el.style.outline;
-  const originalTransition = el.style.transition;
-  
-  el.style.transition = 'outline 0.3s ease';
-  el.style.outline = '4px solid #a855f7';
-  
-  setTimeout(() => {
-    el.style.outline = originalOutline;
-    el.style.transition = originalTransition;
-  }, 2000);
-}

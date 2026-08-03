@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SiteAgent AI",
-  "version": "1.0.0",
-  "description": "Autonomous AI browser agent that executes web tasks via natural language.",
+  "version": "2.0.0",
+  "description": "AI-powered compile-then-execute browser automation engine. Generates automation scripts using Gemini AI and on-device ML, then runs them at raw JavaScript speed.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -21,8 +21,23 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "css": ["content.css"]
+      "js": [
+        "ml/feature-extractor.js",
+        "ml/classifier.js",
+        "engine/event-simulator.js",
+        "content.js"
+      ],
+      "css": ["content.css"],
+      "run_at": "document_idle"
     }
-  ]
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["ml/model/*"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self';"
+  }
 }
