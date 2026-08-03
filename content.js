@@ -122,12 +122,32 @@ function createOverlay(task) {
 
   overlayEl = document.createElement('div');
   overlayEl.id = 'siteagent-overlay';
-  overlayEl.innerHTML = `
-    <div class="siteagent-header">🧠 SiteAgent AI</div>
-    <div class="siteagent-task">Task: <span>${task}</span></div>
-    <div class="siteagent-phase" id="siteagent-phase"></div>
-    <div class="siteagent-status" id="siteagent-status">Initializing...</div>
-  `;
+  
+  const header = document.createElement('div');
+  header.className = 'siteagent-header';
+  header.textContent = '🧠 SiteAgent AI';
+  
+  const taskDiv = document.createElement('div');
+  taskDiv.className = 'siteagent-task';
+  taskDiv.textContent = 'Task: ';
+  const span = document.createElement('span');
+  span.textContent = task;
+  taskDiv.appendChild(span);
+  
+  const phaseDiv = document.createElement('div');
+  phaseDiv.className = 'siteagent-phase';
+  phaseDiv.id = 'siteagent-phase';
+  
+  const statusDiv = document.createElement('div');
+  statusDiv.className = 'siteagent-status';
+  statusDiv.id = 'siteagent-status';
+  statusDiv.textContent = 'Initializing...';
+  
+  overlayEl.appendChild(header);
+  overlayEl.appendChild(taskDiv);
+  overlayEl.appendChild(phaseDiv);
+  overlayEl.appendChild(statusDiv);
+  
   document.body.appendChild(overlayEl);
 }
 
@@ -144,13 +164,18 @@ function updatePhase(phase, message) {
   const phaseEl = document.getElementById('siteagent-phase');
   if (!phaseEl) return;
 
+  phaseEl.textContent = '';
+  phaseEl.className = 'siteagent-phase';
+  const badge = document.createElement('span');
+  
   if (phase === 'compile') {
-    phaseEl.innerHTML = `<span class="phase-badge compile">🧠 Phase 1: Compiling</span>`;
-    phaseEl.className = 'siteagent-phase';
+    badge.className = 'phase-badge compile';
+    badge.textContent = '🧠 Phase 1: Compiling';
   } else if (phase === 'execute') {
-    phaseEl.innerHTML = `<span class="phase-badge execute">⚡ Phase 2: Executing</span>`;
-    phaseEl.className = 'siteagent-phase';
+    badge.className = 'phase-badge execute';
+    badge.textContent = '⚡ Phase 2: Executing';
   }
+  phaseEl.appendChild(badge);
 
   updateStatus(message || '');
 }
@@ -221,56 +246,68 @@ async function executeGeneratedScript(scriptCode) {
 // =============================================
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  switch (message.action) {
-    case 'AGENT_INIT':
-      createOverlay(message.task);
-      sendResponse({ success: true });
-      break;
+  let isAsync = false;
 
-    case 'COMPILE_SCAN':
-      // Phase 1: Scan the page and return semantic schema
-      updatePhase('compile', 'Scanning page elements...');
-      try {
-        const schema = buildSemanticSchema();
-        updateStatus(`Found ${schema.totalElements} interactive elements.`);
-        sendResponse(schema);
-      } catch (err) {
-        sendResponse({ error: err.message });
-      }
-      break;
+  try {
+    switch (message.action) {
+      case 'AGENT_INIT':
+        createOverlay(message.task);
+        sendResponse({ success: true });
+        break;
 
-    case 'EXECUTE_SCRIPT':
-      // Phase 2: Execute the generated script
-      updatePhase('execute', 'Running automation script...');
-      executeGeneratedScript(message.script)
-        .then((result) => {
-          updateStatus(`✅ Done: ${result.result || 'Task completed'}`);
-          sendResponse({ success: true, result: result });
-        })
-        .catch((err) => {
-          updateStatus(`❌ Error: ${err.message}`);
-          sendResponse({ success: false, error: err.message });
-        });
-      return true; // Keep channel open for async
+      case 'COMPILE_SCAN':
+        updatePhase('compile', 'Scanning page elements...');
+        try {
+          const schema = buildSemanticSchema();
+          updateStatus(`Found ${schema.totalElements} interactive elements.`);
+          sendResponse(schema);
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+        break;
 
-    case 'RESCAN_PAGE':
-      // Re-scan after navigation (ML classifier runs again)
-      try {
-        const newSchema = buildSemanticSchema();
-        updateStatus(`Re-scanned: ${newSchema.totalElements} elements.`);
-        sendResponse(newSchema);
-      } catch (err) {
-        sendResponse({ error: err.message });
-      }
-      break;
+      case 'EXECUTE_SCRIPT':
+        updatePhase('execute', 'Running automation script...');
+        executeGeneratedScript(message.script)
+          .then((result) => {
+            updateStatus(`✅ Done: ${result.result || 'Task completed'}`);
+            sendResponse({ success: true, result: result });
+          })
+          .catch((err) => {
+            updateStatus(`❌ Error: ${err.message}`);
+            sendResponse({ success: false, error: err.message });
+          });
+        isAsync = true;
+        break;
 
-    case 'AGENT_DONE':
-      updateStatus(`✅ ${message.result}`);
-      break;
+      case 'RESCAN_PAGE':
+        try {
+          const newSchema = buildSemanticSchema();
+          updateStatus(`Re-scanned: ${newSchema.totalElements} elements.`);
+          sendResponse(newSchema);
+        } catch (err) {
+          sendResponse({ error: err.message });
+        }
+        break;
 
-    case 'AGENT_ERROR':
-      updateStatus(`❌ ${message.error}`);
-      break;
+      case 'AGENT_DONE':
+        updateStatus(`✅ ${message.result}`);
+        sendResponse({ success: true });
+        break;
+
+      case 'AGENT_ERROR':
+        updateStatus(`❌ ${message.error}`);
+        sendResponse({ success: true });
+        break;
+      
+      default:
+        sendResponse({ error: "Unknown action" });
+        break;
+    }
+  } catch (error) {
+    console.error("[SiteAgent] Content script error:", error);
+    sendResponse({ error: error.message });
   }
-  return true;
+
+  return isAsync || true; // Always returning true is actually fine as long as we guarantee sendResponse is called!
 });
