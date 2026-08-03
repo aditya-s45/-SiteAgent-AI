@@ -10,85 +10,43 @@ console.log("SiteAgent AI v2.0 Background Service Worker started.");
 // =============================================
 // SYSTEM PROMPT: Instructs Gemini to generate
 // semantic workflow scripts
-// =============================================
-
-const SYSTEM_PROMPT = `You are SiteAgent AI, a script compiler for browser automation.
+// =============================================const SYSTEM_PROMPT = `You are SiteAgent AI, a script compiler for browser automation.
 
 You receive a SEMANTIC SCHEMA of a webpage (elements classified by role) and a USER TASK.
-You must generate a COMPLETE JavaScript automation script that accomplishes the task.
+You must generate a COMPLETE JSON automation script that accomplishes the task.
 
-The script receives a "sim" object (EventSimulator) with these methods:
+You must output ONLY a valid JSON array of command objects. No markdown formatting, no javascript, just JSON.
+
+Command Object Format:
+{ "action": "methodName", "args": ["arg1", "arg2"], "optional": false }
+
+Available actions (methods on EventSimulator):
 
 ELEMENT INTERACTION (by semantic role - works across page navigations):
-  await sim.typeInRole(role, text)    - Type text into element with given role
-  await sim.clickRole(role)           - Click element with given role
-  await sim.selectRole(role, value)   - Select dropdown option by role
+  { "action": "typeInRole", "args": ["search_input", "campus shoes"] }
+  { "action": "clickRole", "args": ["submit_button"] }
+  { "action": "selectRole", "args": ["sort_control", "Low to High"] }
 
-ELEMENT INTERACTION (by CSS selector - for specific elements):
-  await sim.type(selector, text)      - Type text into element
-  await sim.click(selector)           - Click element
-  await sim.select(selector, value)   - Select dropdown option
-
-ELEMENT INTERACTION (by text content):
-  await sim.clickText(text)           - Click element containing this text
-
-KEYBOARD:
-  await sim.pressEnter(selector?)     - Press Enter key
+ELEMENT INTERACTION (by CSS selector or text):
+  { "action": "type", "args": [".search-box", "text"] }
+  { "action": "click", "args": ["#submit"] }
+  { "action": "clickText", "args": ["Price: Low to High"] }
 
 WAITING:
-  await sim.waitForNavigation(timeout?)   - Wait for page navigation
-  await sim.waitForElement(selector, timeout?)  - Wait for element to appear
-  await sim.waitForRole(role, timeout?)   - Wait for role to appear after navigation
-  await sim.sleep(ms)                     - Wait fixed time
+  { "action": "waitForNavigation" }
+  { "action": "waitForRole", "args": ["cart_button"] }
+  { "action": "sleep", "args": [1500] }
 
-DATA EXTRACTION:
-  await sim.getText(selector)         - Get text from element
-  await sim.getTexts(selector)        - Get array of texts from all matching elements
-
-PROGRESS:
-  sim.reportProgress(message)         - Show status to user
+PROGRESS & RETURN:
+  { "action": "reportProgress", "args": ["Searching..."] }
+  { "action": "return", "args": ["Final success message"] }
 
 CRITICAL RULES:
-1. Output ONLY the function body (no function declaration, no wrapping).
-2. Use semantic roles (typeInRole, clickRole) whenever possible. They work across page navigations because the ML classifier re-tags elements on every page.
-3. After any action that causes navigation, ALWAYS call await sim.waitForNavigation() followed by await sim.sleep(1500) to let the new page load and get classified.
-4. After navigation, use waitForRole() to ensure the target element exists on the new page.
-5. Always return an object: { result: "description of what was accomplished" }
-6. Handle errors gracefully with try/catch.
-7. Use sim.reportProgress() to update the user on what's happening.
-8. Keep the script concise and focused on the task.
-9. Do NOT use any browser APIs directly - only use the sim object.
-10. For searches: typeInRole('search_input', query) → pressEnter() or clickRole('search_button')
-11. For sorting: look for sort_control role or clickText('Price: Low to High') etc.
-
-EXAMPLE - Search for shoes on Amazon and sort by price:
-\`\`\`
-sim.reportProgress("Typing search query...");
-await sim.typeInRole('search_input', 'campus shoes');
-await sim.pressEnter();
-await sim.waitForNavigation();
-await sim.sleep(2000);
-
-sim.reportProgress("Sorting by price...");
-try {
-  await sim.clickRole('sort_control');
-  await sim.sleep(500);
-  await sim.clickText('Price: Low to High');
-} catch(e) {
-  // Try alternative: direct URL sort
-  await sim.clickText('Low to High');
-}
-await sim.waitForNavigation();
-await sim.sleep(2000);
-
-sim.reportProgress("Extracting results...");
-const prices = await sim.getTexts('.a-price-whole');
-const titles = await sim.getTexts('.s-line-clamp-2');
-const cheapest = titles[0] + ' - ₹' + prices[0];
-
-return { result: 'Cheapest campus shoe: ' + cheapest };
-\`\`\`
-`;
+1. Output ONLY a valid JSON array. Do NOT wrap in \`\`\`json.
+2. Use semantic roles (typeInRole, clickRole) whenever possible. They survive page navigations!
+3. After any action that causes navigation, ALWAYS add a "waitForNavigation" command followed by "sleep" [1500].
+4. To handle potential failures gracefully, set "optional": true on a command. If an optional command fails, the script continues.
+5. Always end with a "return" action summarizing the result.`;
 
 // =============================================
 // STATE MANAGEMENT

@@ -181,13 +181,36 @@ async function executeGeneratedScript(scriptCode) {
   const sim = new window.EventSimulator();
 
   try {
-    // Wrap the script code in an async function
-    const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
-    const scriptFn = new AsyncFunction('sim', scriptCode);
+    // Parse the script code as a JSON array of commands
+    // Remove markdown code fences if Gemini accidentally included them
+    let cleanCode = scriptCode.trim();
+    if (cleanCode.startsWith('```json')) cleanCode = cleanCode.substring(7);
+    if (cleanCode.startsWith('```')) cleanCode = cleanCode.substring(3);
+    if (cleanCode.endsWith('```')) cleanCode = cleanCode.substring(0, cleanCode.length - 3);
+    
+    const commands = JSON.parse(cleanCode);
+    let finalResult = { success: true, result: "Task completed successfully." };
 
-    // Execute the script
-    const result = await scriptFn(sim);
-    return result || { success: true };
+    for (const cmd of commands) {
+      const { action, args = [], optional = false } = cmd;
+      
+      try {
+        if (action === 'return') {
+          finalResult = { result: args[0] };
+          break;
+        } else if (typeof sim[action] === 'function') {
+          await sim[action](...args);
+        } else {
+          console.warn(`[SiteAgent] Unknown action: ${action}`);
+        }
+      } catch (e) {
+        if (!optional) {
+          throw new Error(`Step failed (${action}): ${e.message}`);
+        }
+      }
+    }
+
+    return finalResult;
   } catch (error) {
     throw new Error(`Script execution failed: ${error.message}`);
   }
