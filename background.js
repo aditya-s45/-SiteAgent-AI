@@ -229,7 +229,7 @@ async function runExecutePhase(tabId, scriptCode) {
 // =============================================
 
 async function generateScript(task, schema) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${CONFIG.GEMINI_API_KEY}`;
 
   // Build a concise representation of the schema for the prompt
   const schemaDescription = Object.entries(schema.schema)
